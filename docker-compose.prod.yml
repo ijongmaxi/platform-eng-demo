@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ads_platform_db_prod
+    environment:
+      POSTGRES_USER: ads_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ads123}
+      POSTGRES_DB: ads_platform
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ads_user -d ads_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ads_network_prod
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: ads_platform_app_prod
+    environment:
+      APP_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      DEBUG: "False"
+      DATABASE_URL: postgresql+psycopg2://ads_user:${DB_PASSWORD:-ads123}@db:5432/ads_platform
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ads_network_prod
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+volumes:
+  postgres_data_prod:
+    driver: local
+
+networks:
+  ads_network_prod:
+    driver: bridge
